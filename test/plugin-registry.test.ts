@@ -109,6 +109,54 @@ describe('PluginRegistry', () => {
     assert.deepEqual(disposed, ['ok'])
   })
 
+  it('removes services provided by already-loaded plugins on rollback', async () => {
+    const registry = new PluginRegistry()
+    await assert.rejects(
+      registry.load([
+        { name: 'a', setup(ctx) { ctx.provide('a', 1) } },
+        { name: 'b', setup() { throw new Error('boom') } },
+      ]),
+      /boom/,
+    )
+    assert.equal(registry.services.has('a'), false)
+  })
+
+  it('removes services a plugin registered before its own setup failed', async () => {
+    const registry = new PluginRegistry()
+    await assert.rejects(
+      registry.load([
+        {
+          name: 'half',
+          setup(ctx) {
+            ctx.provide('half', 1)
+            throw new Error('boom')
+          },
+        },
+      ]),
+      /boom/,
+    )
+    assert.equal(registry.services.has('half'), false)
+  })
+
+  it('removes each plugin service on dispose without clearing others early', async () => {
+    const registry = new PluginRegistry()
+    await registry.load([
+      { name: 'a', setup(ctx) { ctx.provide('a', 1) } },
+      {
+        name: 'b',
+        dependencies: ['a'],
+        setup(ctx) {
+          ctx.provide('b', ctx.use<number>('a') + 1)
+        },
+      },
+    ])
+    assert.equal(registry.services.has('a'), true)
+    assert.equal(registry.services.get<number>('b'), 2)
+    await registry.dispose()
+    assert.equal(registry.services.has('a'), false)
+    assert.equal(registry.services.has('b'), false)
+  })
+
   it('supports optional dispose and sync setup', async () => {
     const registry = new PluginRegistry()
     await registry.load([

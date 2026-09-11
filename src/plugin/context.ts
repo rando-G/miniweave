@@ -8,6 +8,8 @@ import type { ServiceRegistry } from './service-registry.js'
  * another plugin's internals.
  */
 export class MiniContext {
+  private readonly providedServices = new Set<string>()
+
   constructor(private readonly services: ServiceRegistry) {}
 
   use<T>(name: string): T {
@@ -16,9 +18,18 @@ export class MiniContext {
 
   provide<T>(name: string, service: T): void {
     this.services.provide(name, service)
+    this.providedServices.add(name)
   }
 
   has(name: string): boolean {
     return this.services.has(name)
+  }
+
+  /**
+   * Names of services this context registered. Used by the PluginRegistry to
+   * undo a plugin's registrations on rollback or dispose.
+   */
+  getProvidedServiceNames(): readonly string[] {
+    return [...this.providedServices]
   }
 }

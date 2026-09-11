@@ -2,7 +2,10 @@ import { ServiceRegistry } from './service-registry.js'
 import { MiniContext } from './context.js'
 import type { MiniPlugin } from './types.js'
 
-type LoadedPlugin = { plugin: MiniPlugin }
+type LoadedPlugin = {
+  plugin: MiniPlugin
+  providedServices: string[]
+}
 
 /**
  * Assembles plugins into a runtime:
@@ -25,8 +28,17 @@ export class PluginRegistry {
     try {
       for (const plugin of order) {
         const context = new MiniContext(this.services)
-        await plugin.setup(context)
-        this.loaded.set(plugin.name, { plugin })
+        try {
+          await plugin.setup(context)
+        } catch (error) {
+          // A plugin that fails mid-setup may have registered services already.
+          this.removeServices(context.getProvidedServiceNames())
+          throw error
+        }
+        this.loaded.set(plugin.name, {
+          plugin,
+          providedServices: [...context.getProvidedServiceNames()],
+        })
       }
     } catch (error) {
       await this.disposeLoaded()
@@ -41,9 +53,19 @@ export class PluginRegistry {
 
   private async disposeLoaded(): Promise<void> {
     for (const name of [...this.loaded.keys()].reverse()) {
-      await this.loaded.get(name)?.plugin.dispose?.()
+      const entry = this.loaded.get(name)
+      await entry?.plugin.dispose?.()
+      this.removeServices(entry?.providedServices ?? [])
     }
     this.loaded.clear()
+  }
+
+  private removeServices(names: readonly string[]): void {
+    for (const name of names) {
+      if (this.services.has(name)) {
+        this.services.remove(name)
+      }
+    }
   }
 
   private resolveLoadOrder(plugins: MiniPlugin[]): MiniPlugin[] {

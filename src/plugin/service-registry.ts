@@ -23,6 +23,13 @@ export class ServiceRegistry {
     return this.services.has(name)
   }
 
+  remove(name: string): void {
+    if (!this.services.has(name)) {
+      throw new Error(`Service not found: ${name}`)
+    }
+    this.services.delete(name)
+  }
+
   clear(): void {
     this.services.clear()
   }
