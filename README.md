@@ -22,7 +22,7 @@ MiniWeave 在 MiniCode 之上做的主要改造（进行中）：
 |---|---|---|
 | 架构 | 单体重构，扩展点仅 ToolRegistry / ModelAdapter / MCP | 统一 Plugin + Service + Registry + DI + 生命周期 |
 | 多 Agent | 3 个只读 worker、纯内存、共享模型 | worktree 隔离的可写并行 Agent + DAG 调度 + 预算 |
-| 上下文 | 字符/Token 启发式估算 + 四级压缩 | 真实 tokenizer + repo-map 检索 + 缓存 + 压缩消融 |
+| 上下文 | 字符/Token 启发式估算 + 四级压缩 | 可插拔 TokenCounter（官方 BPE tokenizer）+ repo-map 检索 + 缓存 + 压缩消融 |
 | 评测 | 无 | MiniWeave-Bench + 自动化 Evaluator + 消融实验 |
 
 ## 架构目标
@@ -44,11 +44,44 @@ Loop 只依赖 Service 接口，不关心具体模型 / 工具实现，因此插
 ## Roadmap
 
 - [x] 初始导入 MiniCode 并重命名为 MiniWeave
+- [x] 可插拔 Token 记账（官方 BPE tokenizer + 基准测量）
 - [ ] 插件化 Runtime 骨架（MiniPlugin / ServiceRegistry / MiniContext）
 - [ ] 多 Agent 并行调度（worktree 隔离 + DAG + 预算控制）
 - [ ] 上下文与成本优化（真实 tokenizer + repo-map 检索 + prompt 缓存）
 - [ ] MiniWeave-Bench（多类型任务 + 自动化判分）
 - [ ] 消融实验：Baseline / +Context / +Prompt Optimizer / +Multi-Agent / Full
+
+## Token 记账（可插拔）
+
+上下文用量既决定压缩阈值，也决定成本，所以计数策略是可插拔的 `TokenCounter`：
+
+| 实现 | 说明 |
+|---|---|
+| `heuristic` | 无依赖的字符/常数估算（库默认，确定性） |
+| `anthropic` | Anthropic 官方 BPE tokenizer（可选依赖 `@anthropic-ai/tokenizer`） |
+| `auto` | 装了真 tokenizer 就用它，否则回退启发式（CLI 默认） |
+
+```bash
+export MINIWEAVE_TOKEN_COUNTER=anthropic   # heuristic | anthropic | auto
+```
+
+精确总量仍以 provider 返回的 `usage` 为准；tokenizer 用于估算 provider usage 之后的尾部消息，以及在 provider 不返回 usage 时兜底。
+
+### 基准
+
+```bash
+npm run bench:tokens        # 离线：启发式 vs 官方 tokenizer
+npm run bench:tokens:live   # 用 Claude 真实 input_tokens 校准（少量请求）
+```
+
+8 类消息样本上的平均绝对百分比误差（MAPE）：
+
+| 计数器 | MAPE |
+|---|---|
+| 字符启发式 | 50.4% |
+| Anthropic 官方 tokenizer | **6.4%** |
+
+> 参照为 Claude 原始 `input_tokens`，其中含少量请求固定开销，因此 tokenizer 误差是保守上界。
 
 ## 快速开始
 
@@ -70,6 +103,8 @@ npm test           # 跑测试
 
 ```text
 src/
+├─ plugin/                # 插件化 Runtime（MiniPlugin / ServiceRegistry / ...）
+├─ token/                 # 可插拔 Token 计数（heuristic / anthropic tokenizer）
 ├─ agent-loop.ts          # Model → Tool → Result 多轮状态推进
 ├─ tool.ts                # 工具注册、校验、执行
 ├─ tools/                 # 文件 / Shell / MCP / Skills 等工具
@@ -79,7 +114,8 @@ src/
 ├─ agents/                # 多 Agent MVP
 ├─ tui/                   # 终端 UI
 └─ ...
-test/                     # 31 个测试文件，npm test 运行
+test/                     # 294 个测试，npm test 运行
+bench/                    # 评测脚本（token 计数准确度等）
 ```
 
 ## License

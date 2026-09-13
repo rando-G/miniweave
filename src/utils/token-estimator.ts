@@ -1,4 +1,5 @@
 import type { ChatMessage, ProviderUsage } from '../types.js'
+import { getTokenCounter } from '../token/index.js'
 import { getModelContextWindow } from './model-context.js'
 
 export type TokenAccountingSource =
@@ -31,60 +32,17 @@ export type ContextStats = {
   accounting: TokenAccountingResult
 }
 
-const CHARS_PER_TOKEN: Record<string, number> = {
-  system: 3.5,
-  user: 3.0,
-  assistant_thinking: 3.0,
-  assistant: 3.5,
-  assistant_progress: 3.5,
-  assistant_tool_call: 2.5,
-  tool_result: 2.0,
-  context_summary: 3.5,
-  snip_boundary: 3.5,
-}
-
 const CLEAR_MARKER = '[Output cleared for context space]'
 
-function messageContentLength(message: ChatMessage): number {
-  switch (message.role) {
-    case 'system':
-    case 'user':
-    case 'assistant':
-    case 'assistant_progress':
-      return message.content.length
-    case 'assistant_thinking':
-      try {
-        return JSON.stringify(message.blocks).length
-      } catch {
-        return 0
-      }
-    case 'assistant_tool_call':
-      try {
-        return JSON.stringify(message.input).length
-      } catch {
-        return 0
-      }
-    case 'tool_result':
-      return message.content.length
-    case 'context_summary':
-      return message.content.length
-    case 'snip_boundary':
-      return message.content.length
-    default:
-      return 0
-  }
-}
-
 export function estimateMessageTokens(message: ChatMessage): number {
-  const ratio = CHARS_PER_TOKEN[message.role] ?? 3.0
-  const length = messageContentLength(message)
-  return Math.ceil(length / ratio)
+  return getTokenCounter().countMessage(message)
 }
 
 export function estimateMessagesTokens(messages: ChatMessage[]): number {
+  const counter = getTokenCounter()
   let total = 0
   for (const message of messages) {
-    total += estimateMessageTokens(message)
+    total += counter.countMessage(message)
   }
   return total
 }

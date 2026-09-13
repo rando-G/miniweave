@@ -12,6 +12,8 @@
     "check": "tsc --noEmit",
     "lint": "eslint src test",
     "test": "node test/run-tests.mjs",
+    "bench:tokens": "tsx bench/token-accuracy.ts",
+    "bench:tokens:live": "tsx bench/token-accuracy.ts --live",
     "install-local": "tsx src/install.ts"
   },
   "dependencies": {
@@ -25,5 +27,8 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.2",
     "typescript-eslint": "8.46.4"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4"
   }
 }

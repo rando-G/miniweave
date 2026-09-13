@@ -8,6 +8,7 @@ import {
   tryHandleLocalCommand,
 } from './cli-commands.js'
 import { loadRuntimeConfig } from './config.js'
+import { initTokenCounterFromEnv } from './token/index.js'
 import { forkSession } from './session.js'
 import { maybeHandleManagementCommand } from './manage-cli.js'
 import { summarizeMcpServers } from './mcp-status.js'
@@ -36,6 +37,11 @@ import { createContentReplacementState } from './utils/tool-result-storage.js'
 async function main(): Promise<void> {
   const cwd = process.cwd()
   const argv = process.argv.slice(2)
+
+  // Select the token counting strategy once at startup. Defaults to the real
+  // BPE tokenizer when the optional dependency is present, otherwise the
+  // dependency-free heuristic.
+  initTokenCounterFromEnv()
 
   let resumeTarget: string | 'picker' | undefined
   const resumeIndex = argv.indexOf('--resume')
