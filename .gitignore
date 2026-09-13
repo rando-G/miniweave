@@ -8,3 +8,6 @@ dist/
 # MiniCode local artifacts
 .mini-code/settings.local.json
 .mini-code/sessions/
+
+# Local tooling directory (not part of the project)
+.workbuddy/
