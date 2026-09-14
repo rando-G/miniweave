@@ -4,6 +4,7 @@ import { listBackgroundTasks } from './background-tasks.js'
 import { SessionRuntime } from './runtime/session-runtime.js'
 import type { TurnRequest } from './runtime/turn-runner.js'
 import { throwIfAborted } from './abort.js'
+import { formatResponseTokens } from './utils/token-usage-label.js'
 import { runAgentTurnWithOutcome } from './agent-loop.js'
 import {
   SLASH_COMMANDS,
@@ -1512,10 +1513,12 @@ async function executeTtyTurn(
         const workedForSeconds = metadata?.final
           ? Math.max(0, Math.floor((Date.now() - turnStartedAt) / 1000))
           : undefined
+        const tokenLabel = formatResponseTokens(metadata?.usage, content)
         pushTranscriptEntry(state, {
           kind: 'assistant',
           body: content,
           ...(workedForSeconds === undefined ? {} : { workedForSeconds }),
+          ...(tokenLabel === null ? {} : { tokenLabel }),
         })
         state.transcriptScrollOffset = 0
         rerender()

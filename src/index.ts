@@ -9,6 +9,7 @@ import {
 } from './cli-commands.js'
 import { loadRuntimeConfig } from './config.js'
 import { initTokenCounterFromEnv } from './token/index.js'
+import { formatResponseTokens } from './utils/token-usage-label.js'
 import { forkSession } from './session.js'
 import { maybeHandleManagementCommand } from './manage-cli.js'
 import { summarizeMcpServers } from './mcp-status.js'
@@ -190,7 +191,11 @@ async function main(): Promise<void> {
             signal: request.signal, maxSteps: request.mode ? 50 : undefined,
             stopOnFatalToolError: !!request.mode,
             modelName: runtime?.model ?? '', contentReplacementState, contextCollapseState,
-            onAssistantMessage: content => console.log(`\n${content}\n`),
+            onAssistantMessage: (content, metadata) => {
+              console.log(`\n${content}\n`)
+              const tokenLabel = formatResponseTokens(metadata?.usage, content)
+              if (tokenLabel) console.log(`[${tokenLabel}]\n`)
+            },
           })
           messages = result.messages
           if (result.error) console.log(`\n${result.error}\n`)

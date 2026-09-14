@@ -9,6 +9,8 @@ export type TranscriptEntry =
       kind: 'assistant'
       body: string
       workedForSeconds?: number
+      /** Short label describing how many tokens this reply consumed. */
+      tokenLabel?: string
     }
   | {
       id: number

@@ -150,12 +150,23 @@ function previewToolBody(toolName: string, body: string): string {
   return limited
 }
 
-function renderWorkedForDivider(seconds: number): string {
+function renderAssistantFooter(
+  entry: Extract<TranscriptEntry, { kind: 'assistant' }>,
+): string | null {
+  const parts: string[] = []
+  if (entry.workedForSeconds !== undefined) {
+    parts.push(`worked for ${Math.max(0, entry.workedForSeconds)}s`)
+  }
+  if (entry.tokenLabel) {
+    parts.push(entry.tokenLabel)
+  }
+  if (parts.length === 0) return null
+
   const width = Math.max(60, process.stdout.columns ?? 100)
   const inner = Math.max(0, width - 4)
-  const label = `Worked for ${Math.max(0, seconds)}s`
+  const label = parts.join('  ·  ')
   const labelWidth = stringDisplayWidth(label)
-  return `${' '.repeat(Math.max(0, inner - labelWidth))}${label}`
+  return `${' '.repeat(Math.max(0, inner - labelWidth))}${DIM}${label}${RESET}`
 }
 
 function renderTranscriptEntry(entry: TranscriptEntry): string {
@@ -164,12 +175,11 @@ function renderTranscriptEntry(entry: TranscriptEntry): string {
   }
 
   if (entry.kind === 'assistant') {
-    const header = `${GREEN}${BOLD}Minicode${RESET}\n${indentBlock(
+    const header = `${GREEN}${BOLD}MiniWeave${RESET}\n${indentBlock(
       renderMarkdownish(entry.body),
     )}`
-    return entry.workedForSeconds === undefined
-      ? header
-      : `${header}\n${renderWorkedForDivider(entry.workedForSeconds)}`
+    const footer = renderAssistantFooter(entry)
+    return footer === null ? header : `${header}\n${footer}`
   }
 
   if (entry.kind === 'progress') {

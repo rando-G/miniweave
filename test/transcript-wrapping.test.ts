@@ -50,7 +50,7 @@ describe('transcript wrapping', () => {
     assert.equal(lines[1]?.startsWith('> first'), true)
     assert.equal(lines[1]?.length, 56)
     assert.equal(lines[2], '·')
-    assert.equal(lines[3], 'Minicode')
+    assert.equal(lines[3], 'MiniWeave')
     assert.equal(lines[4], '  second')
   })
 
@@ -74,16 +74,41 @@ describe('transcript wrapping', () => {
     const entries: TranscriptEntry[] = [
       { id: 1, kind: 'assistant', body: 'done', workedForSeconds: 10 },
     ]
-
     const lines = withTerminalWidth(60, () =>
       renderTranscriptLines(entries).map(line => line.replace(/\u001b\[[\d;]*[A-Za-z]/g, '')),
     )
 
-    assert.equal(lines[0], 'Minicode')
+    assert.equal(lines[0], 'MiniWeave')
     assert.equal(lines[1], '  done')
-    assert.equal(lines[2]?.endsWith('Worked for 10s'), true)
+    assert.equal(lines[2]?.endsWith('worked for 10s'), true)
     assert.equal(lines[2]?.length, 56)
     assert.equal(lines[2]?.includes('-'), false)
+  })
+
+  it('renders the token label next to the worked duration', () => {
+    const entries: TranscriptEntry[] = [
+      { id: 1, kind: 'assistant', body: 'done', workedForSeconds: 3, tokenLabel: 'tokens 1.2k in / 340 out' },
+    ]
+
+    const lines = withTerminalWidth(80, () =>
+      renderTranscriptLines(entries).map(line => line.replace(/\u001b\[[\d;]*[A-Za-z]/g, '')),
+    )
+
+    const footer = lines[2] ?? ''
+    assert.equal(footer.includes('worked for 3s'), true)
+    assert.equal(footer.includes('tokens 1.2k in / 340 out'), true)
+  })
+
+  it('renders a token label even without a worked duration', () => {
+    const entries: TranscriptEntry[] = [
+      { id: 1, kind: 'assistant', body: 'done', tokenLabel: 'tokens ~42 estimated' },
+    ]
+
+    const lines = withTerminalWidth(80, () =>
+      renderTranscriptLines(entries).map(line => line.replace(/\u001b\[[\d;]*[A-Za-z]/g, '')),
+    )
+
+    assert.equal(lines[2]?.includes('tokens ~42 estimated'), true)
   })
 
   it('counts wrapped visual rows when calculating scroll offset', () => {
