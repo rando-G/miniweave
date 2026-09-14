@@ -91,14 +91,26 @@ npm install
 # 配置模型凭据
 #   任何兼容 Anthropic Messages API 的端点都可用，包括 DeepSeek 的
 #   Anthropic 兼容端点（https://api.deepseek.com/anthropic）。
-export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic   # 或 https://api.anthropic.com
-export ANTHROPIC_AUTH_TOKEN=sk-...                            # 或 ANTHROPIC_API_KEY
-export MINI_CODE_MODEL=deepseek-flash                         # 优先级最高
+export MINIWEAVE_BASE_URL=https://api.deepseek.com/anthropic   # 或写进 settings.json
+export MINIWEAVE_AUTH_TOKEN=sk-...                            # 或 MINIWEAVE_API_KEY
+export MINIWEAVE_MODEL=deepseek-flash
 
 npm run dev        # 交互式运行
 ./bin/weave        # 等价入口
 npm test           # 跑测试
 ```
+
+### 配置优先级
+
+从高到低：
+
+1. `MINIWEAVE_*` 环境变量（本工具专属命名空间）
+2. `MINI_CODE_*` 环境变量（继承自上游）
+3. `~/.mini-code/settings.json`
+4. `ANTHROPIC_*` 环境变量
+5. `~/.claude/settings.json`
+
+> **为什么设置文件排在 `ANTHROPIC_*` 之前？** 因为 `ANTHROPIC_*` 常被其它 Anthropic 兼容工具（pi、Claude Code）导出，如果让它覆盖本工具的配置，就会出现“模型来自 settings.json、凭据来自别人”的脑裂。启动时会检测这种混合来源并打印警告。用 `/status` 可以看每个值实际来自哪里。
 
 > 注：内部命名（`~/.mini-code` 数据目录、`MINI_CODE_*` 常量）暂与上游一致，后续统一为 MiniWeave。
 

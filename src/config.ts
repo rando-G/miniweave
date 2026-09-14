@@ -200,52 +200,145 @@ export async function saveMiniCodeSettings(
   )
 }
 
-export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
-  const effectiveSettings = await loadEffectiveSettings()
-  const env = {
-    ...(effectiveSettings.env ?? {}),
-    ...process.env,
+type ConfigTier =
+  | 'miniweave-env'
+  | 'mini-code-env'
+  | 'mini-code-settings'
+  | 'process-env'
+  | 'claude-settings'
+
+type ConfigCandidate = {
+  value: string | undefined
+  source: string
+  tier: ConfigTier
+}
+
+function resolveFirst(candidates: ConfigCandidate[]): ConfigCandidate {
+  for (const candidate of candidates) {
+    if (candidate.value?.trim()) return candidate
   }
+  return { value: undefined, source: 'unset', tier: 'process-env' }
+}
 
-  const model =
-    process.env.MINI_CODE_MODEL ||
-    effectiveSettings.model ||
-    String(env.ANTHROPIC_MODEL ?? '').trim()
+/** Settings files may store env values as `string | number`; normalize to text. */
+function asText(value: string | number | undefined): string | undefined {
+  return value === undefined ? undefined : String(value)
+}
 
-  const baseUrl =
-    String(env.ANTHROPIC_BASE_URL ?? '').trim() || 'https://api.anthropic.com'
-  const authToken = String(env.ANTHROPIC_AUTH_TOKEN ?? '').trim() || undefined
-  const apiKey = String(env.ANTHROPIC_API_KEY ?? '').trim() || undefined
-  const rawMaxOutputTokens =
-    process.env.MINI_CODE_MAX_OUTPUT_TOKENS ??
-    effectiveSettings.maxOutputTokens ??
-    env.MINI_CODE_MAX_OUTPUT_TOKENS
-  const parsedMaxOutputTokens =
-    rawMaxOutputTokens === undefined ? NaN : Number(rawMaxOutputTokens)
+export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
+  const [claudeSettings, miniCodeSettings, globalMcpConfig, projectMcpConfig] =
+    await Promise.all([
+      readSettingsFile(CLAUDE_SETTINGS_PATH),
+      readSettingsFile(MINI_CODE_SETTINGS_PATH),
+      readMcpConfigFile(MINI_CODE_MCP_PATH),
+      readMcpConfigFile(PROJECT_MCP_PATH),
+    ])
+
+  const mcpServers =
+    mergeSettings(
+      mergeSettings(
+        mergeSettings(claudeSettings, { mcpServers: globalMcpConfig }),
+        { mcpServers: projectMcpConfig },
+      ),
+      miniCodeSettings,
+    ).mcpServers ?? {}
+
+  const miniCodeEnv = miniCodeSettings.env ?? {}
+  const claudeEnv = claudeSettings.env ?? {}
+  const env = process.env
+
+  // Resolution order, highest precedence first:
+  //   1. MINIWEAVE_*     this tool's own namespace; cannot collide with another
+  //                      Anthropic-compatible tool that exports ANTHROPIC_*
+  //   2. MINI_CODE_*     legacy names inherited from upstream
+  //   3. ~/.mini-code/settings.json   this tool's explicit configuration
+  //   4. ANTHROPIC_* process env      often owned by another tool (pi, Claude Code)
+  //   5. ~/.claude/settings.json      shared Claude configuration
+  //
+  // Note the deliberate inversion at 3 vs 4: a shared ANTHROPIC_* variable in
+  // the shell should not silently override this tool's own settings file.
+  const model = resolveFirst([
+    { value: env.MINIWEAVE_MODEL, source: 'MINIWEAVE_MODEL', tier: 'miniweave-env' },
+    { value: env.MINI_CODE_MODEL, source: 'MINI_CODE_MODEL', tier: 'mini-code-env' },
+    { value: asText(miniCodeSettings.model), source: `${MINI_CODE_SETTINGS_PATH} (model)`, tier: 'mini-code-settings' },
+    { value: env.ANTHROPIC_MODEL, source: 'ANTHROPIC_MODEL', tier: 'process-env' },
+    { value: asText(claudeEnv.ANTHROPIC_MODEL), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
+  ])
+
+  const endpoint = resolveFirst([
+    { value: env.MINIWEAVE_BASE_URL, source: 'MINIWEAVE_BASE_URL', tier: 'miniweave-env' },
+    { value: env.MINI_CODE_BASE_URL, source: 'MINI_CODE_BASE_URL', tier: 'mini-code-env' },
+    { value: asText(miniCodeEnv.ANTHROPIC_BASE_URL), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' },
+    { value: env.ANTHROPIC_BASE_URL, source: 'ANTHROPIC_BASE_URL', tier: 'process-env' },
+    { value: asText(claudeEnv.ANTHROPIC_BASE_URL), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
+  ])
+
+  // Credentials resolve as a unit so a bearer token and an API key can never be
+  // picked from two different sources.
+  const authCandidates = [
+    { value: env.MINIWEAVE_AUTH_TOKEN, source: 'MINIWEAVE_AUTH_TOKEN', tier: 'miniweave-env' as const, kind: 'authToken' as const },
+    { value: env.MINIWEAVE_API_KEY, source: 'MINIWEAVE_API_KEY', tier: 'miniweave-env' as const, kind: 'apiKey' as const },
+    { value: asText(miniCodeEnv.ANTHROPIC_AUTH_TOKEN), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'authToken' as const },
+    { value: asText(miniCodeEnv.ANTHROPIC_API_KEY), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'apiKey' as const },
+    { value: env.ANTHROPIC_AUTH_TOKEN, source: 'ANTHROPIC_AUTH_TOKEN', tier: 'process-env' as const, kind: 'authToken' as const },
+    { value: env.ANTHROPIC_API_KEY, source: 'ANTHROPIC_API_KEY', tier: 'process-env' as const, kind: 'apiKey' as const },
+    { value: asText(claudeEnv.ANTHROPIC_AUTH_TOKEN), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' as const, kind: 'authToken' as const },
+    { value: asText(claudeEnv.ANTHROPIC_API_KEY), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' as const, kind: 'apiKey' as const },
+  ]
+  const auth = authCandidates.find(candidate => candidate.value?.trim())
+
+  const authToken = auth?.kind === 'authToken' ? auth.value?.trim() : undefined
+  const apiKey = auth?.kind === 'apiKey' ? auth.value?.trim() : undefined
+
+  const maxOutputCandidate = resolveFirst([
+    { value: env.MINIWEAVE_MAX_OUTPUT_TOKENS, source: 'MINIWEAVE_MAX_OUTPUT_TOKENS', tier: 'miniweave-env' },
+    { value: env.MINI_CODE_MAX_OUTPUT_TOKENS, source: 'MINI_CODE_MAX_OUTPUT_TOKENS', tier: 'mini-code-env' },
+    { value: asText(miniCodeSettings.maxOutputTokens), source: `${MINI_CODE_SETTINGS_PATH} (maxOutputTokens)`, tier: 'mini-code-settings' },
+    { value: asText(claudeEnv.MINI_CODE_MAX_OUTPUT_TOKENS), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
+  ])
+  const parsedMaxOutputTokens = Number(maxOutputCandidate.value)
   const maxOutputTokens =
     Number.isFinite(parsedMaxOutputTokens) && parsedMaxOutputTokens > 0
       ? Math.floor(parsedMaxOutputTokens)
       : undefined
 
-  if (!model) {
+  const modelValue = model.value
+  if (!modelValue) {
     throw new Error(
-      `No model configured. Set ~/.mini-code/settings.json or env.ANTHROPIC_MODEL.`,
+      'No model configured. Set MINIWEAVE_MODEL, ~/.mini-code/settings.json, or ANTHROPIC_MODEL.',
     )
   }
 
   if (!authToken && !apiKey) {
     throw new Error(
-      `No auth configured. Set ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY in ~/.mini-code/settings.json or process env.`,
+      'No auth configured. Set MINIWEAVE_AUTH_TOKEN / MINIWEAVE_API_KEY, '
+        + '~/.mini-code/settings.json, or ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY.',
+    )
+  }
+
+  // Detect the split-brain case: the model comes from this tool's settings file
+  // while the endpoint or credential comes from a shared ANTHROPIC_* variable
+  // that most likely belongs to another tool.
+  if (
+    model.tier === 'mini-code-settings' &&
+    (endpoint.tier === 'process-env' || auth?.tier === 'process-env')
+  ) {
+    console.error(
+      '[miniweave] config warning: mixed sources — '
+        + `model=${model.source}, endpoint=${endpoint.source}, auth=${auth?.source ?? 'unset'}. `
+        + 'Another Anthropic-compatible tool may be exporting ANTHROPIC_* in this shell. '
+        + 'Set MINIWEAVE_BASE_URL / MINIWEAVE_AUTH_TOKEN to override explicitly.',
     )
   }
 
   return {
-    model,
-    baseUrl,
+    model: modelValue,
+    baseUrl: endpoint.value ?? 'https://api.anthropic.com',
     authToken,
     apiKey,
     maxOutputTokens,
-    mcpServers: effectiveSettings.mcpServers ?? {},
-    sourceSummary: `config: ${MINI_CODE_SETTINGS_PATH} > ${CLAUDE_SETTINGS_PATH} > process.env`,
+    mcpServers,
+    sourceSummary:
+      `model=${model.source} | endpoint=${endpoint.source} | auth=${auth?.source ?? 'unset'}`,
   }
 }
