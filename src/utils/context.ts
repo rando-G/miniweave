@@ -79,6 +79,11 @@ const MODEL_MAX_OUTPUT_TOKEN_RULES: ModelMaxOutputTokenRule[] = [
     limits: { default: 65_536, upperLimit: 65_536 },
   },
   {
+    // DeepSeek-V4.1-Flash
+    patterns: ['deepseek-flash'],
+    limits: { default: 32_000, upperLimit: 384_000 },
+  },
+  {
     patterns: ['deepseek-reasoner'],
     limits: { default: 32_000, upperLimit: 64_000 },
   },

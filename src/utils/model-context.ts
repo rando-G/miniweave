@@ -108,6 +108,12 @@ const MODEL_CONTEXT_RULES: ModelContextRule[] = [
     outputReserve: 16_000,
   },
   {
+    // DeepSeek-V4.1-Flash: 1M context, 384K max output, native Anthropic API.
+    patterns: ['deepseek-flash'],
+    contextWindow: 1_000_000,
+    outputReserve: 64_000,
+  },
+  {
     patterns: ['deepseek-reasoner'],
     contextWindow: 128_000,
     outputReserve: 16_000,

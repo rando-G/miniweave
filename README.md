@@ -4,7 +4,7 @@
 
 **MiniWeave** 是一个插件化重构的 Coding Agent Harness：在 [MiniCode](https://github.com/LiuMengxuan04/MiniCode)（MIT）基础上，把 Agent Loop、Model、Tool、Session、Permission、Context Manager 抽象为可替换插件，并用自建 Benchmark + 消融实验量化每个 Harness 机制对 Agent 执行效果的影响。
 
-- **技术栈**：TypeScript · Node.js · Anthropic API · JSONL · git worktree
+- **技术栈**：TypeScript · Node.js · Anthropic / DeepSeek API · JSONL · git worktree
 - **定位**：轻量、可读、可扩展、可量化 —— 面向学习与面试的 Agent Runtime
 
 ## 为什么叫 MiniWeave
@@ -88,9 +88,12 @@ npm run bench:tokens:live   # 用 Claude 真实 input_tokens 校准（少量请�
 ```bash
 npm install
 
-# 配置模型凭据（当前与上游 MiniCode 兼容）
-export ANTHROPIC_MODEL=claude-sonnet-4
-export ANTHROPIC_API_KEY=sk-ant-...      # 或 ANTHROPIC_AUTH_TOKEN
+# 配置模型凭据
+#   任何兼容 Anthropic Messages API 的端点都可用，包括 DeepSeek 的
+#   Anthropic 兼容端点（https://api.deepseek.com/anthropic）。
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic   # 或 https://api.anthropic.com
+export ANTHROPIC_AUTH_TOKEN=sk-...                            # 或 ANTHROPIC_API_KEY
+export MINI_CODE_MODEL=deepseek-flash                         # 优先级最高
 
 npm run dev        # 交互式运行
 ./bin/weave        # 等价入口
