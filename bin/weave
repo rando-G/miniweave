@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Thin wrapper for Unix / Git Bash. The real entry point is bin/weave.mjs so the
+# same launcher works on Windows (via npm's generated shims) and Unix.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-exec node "${PROJECT_DIR}/node_modules/tsx/dist/cli.mjs" "${PROJECT_DIR}/src/index.ts" "$@"
+exec node "${SCRIPT_DIR}/weave.mjs" "$@"

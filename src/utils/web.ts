@@ -11,7 +11,7 @@ type SearchResult = {
 type SearchProvider = 'duckduckgo-lite' | 'sogou'
 
 const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MiniCode/0.1'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MiniWeave/0.1'
 const DEFAULT_TIMEOUT_MS = 12000
 const DEFAULT_MAX_RETRIES = 2
 

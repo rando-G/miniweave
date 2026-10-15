@@ -50,7 +50,10 @@ export function resetTerminalFrame(): void {
   previousRows = 0
 }
 
-export function renderTerminalFrame(frame: string): void {
+export function renderTerminalFrame(
+  frame: string,
+  cursor?: { row: number; column: number },
+): void {
   const lines = frame.split('\n')
   const columns = process.stdout.columns ?? 0
   const rows = process.stdout.rows ?? 0
@@ -59,8 +62,15 @@ export function renderTerminalFrame(frame: string): void {
     previousColumns !== columns ||
     previousRows !== rows
 
+  // Written in the same chunk as the frame so the terminal never observes the
+  // cursor parked at the end of the frame. IME composition is anchored to the
+  // real cursor, so a visible intermediate position makes it flicker there.
+  const cursorSuffix = cursor
+    ? `\u001b[${Math.max(1, cursor.row)};${Math.max(1, cursor.column)}H\u001b[?25h`
+    : ''
+
   if (forceFullRender) {
-    process.stdout.write(HOME + ERASE_TO_END + frame)
+    process.stdout.write(HOME + ERASE_TO_END + frame + cursorSuffix)
   } else {
     const previous = previousFrameLines ?? []
     const maxLines = Math.max(previous.length, lines.length)
@@ -74,6 +84,7 @@ export function renderTerminalFrame(frame: string): void {
       output += `[${index + 1};1H${ERASE_LINE}${nextLine}`
     }
 
+    output += cursorSuffix
     if (output.length > 0) {
       process.stdout.write(output)
     }

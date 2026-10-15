@@ -11,17 +11,17 @@ import {
 import { discoverSkills, installSkill, removeManagedSkill } from './skills.js'
 
 function printUsage(): void {
-  console.log(`minicode management commands
+  console.log(`weave management commands
 
-minicode mcp list [--project]
-minicode mcp add <name> [--project] [--protocol <auto|content-length|newline-json|streamable-http>] [--url <endpoint>] [--header KEY=VALUE ...] [--env KEY=VALUE ...] [-- <command> [args...]]
-minicode mcp login <name> --token <bearer-token>
-minicode mcp logout <name>
-minicode mcp remove <name> [--project]
+weave mcp list [--project]
+weave mcp add <name> [--project] [--protocol <auto|content-length|newline-json|streamable-http>] [--url <endpoint>] [--header KEY=VALUE ...] [--env KEY=VALUE ...] [-- <command> [args...]]
+weave mcp login <name> --token <bearer-token>
+weave mcp logout <name>
+weave mcp remove <name> [--project]
 
-minicode skills list
-minicode skills add <path-to-skill-or-dir> [--name <name>] [--project]
-minicode skills remove <name> [--project]`)
+weave skills list
+weave skills add <path-to-skill-or-dir> [--name <name>] [--project]
+weave skills remove <name> [--project]`)
 }
 
 function parseScope(args: string[]): {

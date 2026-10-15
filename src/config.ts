@@ -1,9 +1,10 @@
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { isEnoentError } from './utils/errors.js'
 
-export type MiniCodeSettings = {
+export type MiniWeaveSettings = {
   env?: Record<string, string | number>
   model?: string
   maxOutputTokens?: number
@@ -33,9 +34,31 @@ export type RuntimeConfig = {
 
 export type McpConfigScope = 'user' | 'project'
 
-export const MINI_CODE_DIR = process.env.MINI_CODE_HOME
-  ? path.resolve(process.env.MINI_CODE_HOME)
-  : path.join(os.homedir(), '.mini-code')
+/** New default data directory, with a fallback to an existing legacy install. */
+function resolveDataDir(): string {
+  const explicit = process.env.MINIWEAVE_HOME ?? process.env.MINI_CODE_HOME
+  if (explicit) return path.resolve(explicit)
+  const home = os.homedir()
+  const current = path.join(home, '.weave')
+  const legacy = path.join(home, '.mini-code')
+  // Prefer `.weave`, but keep an existing `.mini-code` so an upgrade never
+  // loses settings, permissions, or sessions.
+  return !existsSync(current) && existsSync(legacy) ? legacy : current
+}
+
+/** Project-local config directory name (`.weave`, or a legacy `.mini-code`). */
+export function projectConfigDirName(cwd: string): string {
+  const current = path.join(cwd, '.weave')
+  const legacy = path.join(cwd, '.mini-code')
+  return !existsSync(current) && existsSync(legacy) ? '.mini-code' : '.weave'
+}
+
+export function projectConfigDir(cwd: string): string {
+  return path.join(cwd, projectConfigDirName(cwd))
+}
+
+export const MINI_CODE_DIR = resolveDataDir()
+export const MINIWEAVE_DIR = MINI_CODE_DIR
 export const MINI_CODE_SETTINGS_PATH = path.join(MINI_CODE_DIR, 'settings.json')
 export const MINI_CODE_HISTORY_PATH = path.join(MINI_CODE_DIR, 'history.jsonl')
 export const MINI_CODE_PERMISSIONS_PATH = path.join(MINI_CODE_DIR, 'permissions.json')
@@ -69,10 +92,10 @@ export async function saveMcpTokensFile(
   await writeFile(filePath, `${JSON.stringify(tokens, null, 2)}\n`, 'utf8')
 }
 
-async function readSettingsFile(filePath: string): Promise<MiniCodeSettings> {
+async function readSettingsFile(filePath: string): Promise<MiniWeaveSettings> {
   try {
     const content = await readFile(filePath, 'utf8')
-    return JSON.parse(content) as MiniCodeSettings
+    return JSON.parse(content) as MiniWeaveSettings
   } catch (error) {
     if (isEnoentError(error)) {
       return {}
@@ -137,9 +160,9 @@ export async function saveScopedMcpServers(
 }
 
 function mergeSettings(
-  base: MiniCodeSettings,
-  override: MiniCodeSettings,
-): MiniCodeSettings {
+  base: MiniWeaveSettings,
+  override: MiniWeaveSettings,
+): MiniWeaveSettings {
   const mergedMcpServers = {
     ...(base.mcpServers ?? {}),
   }
@@ -170,8 +193,8 @@ function mergeSettings(
   }
 }
 
-export async function loadEffectiveSettings(): Promise<MiniCodeSettings> {
-  const [claudeSettings, globalMcpConfig, projectMcpConfig, miniCodeSettings] =
+export async function loadEffectiveSettings(): Promise<MiniWeaveSettings> {
+  const [claudeSettings, globalMcpConfig, projectMcpConfig, miniWeaveSettings] =
     await Promise.all([
       readSettingsFile(CLAUDE_SETTINGS_PATH),
       readMcpConfigFile(MINI_CODE_MCP_PATH),
@@ -183,12 +206,12 @@ export async function loadEffectiveSettings(): Promise<MiniCodeSettings> {
       mergeSettings(claudeSettings, { mcpServers: globalMcpConfig }),
       { mcpServers: projectMcpConfig },
     ),
-    miniCodeSettings,
+    miniWeaveSettings,
   )
 }
 
-export async function saveMiniCodeSettings(
-  updates: MiniCodeSettings,
+export async function saveMiniWeaveSettings(
+  updates: MiniWeaveSettings,
 ): Promise<void> {
   await mkdir(MINI_CODE_DIR, { recursive: true })
   const existing = await readSettingsFile(MINI_CODE_SETTINGS_PATH)
@@ -226,7 +249,7 @@ function asText(value: string | number | undefined): string | undefined {
 }
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
-  const [claudeSettings, miniCodeSettings, globalMcpConfig, projectMcpConfig] =
+  const [claudeSettings, miniWeaveSettings, globalMcpConfig, projectMcpConfig] =
     await Promise.all([
       readSettingsFile(CLAUDE_SETTINGS_PATH),
       readSettingsFile(MINI_CODE_SETTINGS_PATH),
@@ -240,10 +263,10 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
         mergeSettings(claudeSettings, { mcpServers: globalMcpConfig }),
         { mcpServers: projectMcpConfig },
       ),
-      miniCodeSettings,
+      miniWeaveSettings,
     ).mcpServers ?? {}
 
-  const miniCodeEnv = miniCodeSettings.env ?? {}
+  const miniWeaveEnv = miniWeaveSettings.env ?? {}
   const claudeEnv = claudeSettings.env ?? {}
   const env = process.env
 
@@ -251,7 +274,7 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   //   1. MINIWEAVE_*     this tool's own namespace; cannot collide with another
   //                      Anthropic-compatible tool that exports ANTHROPIC_*
   //   2. MINI_CODE_*     legacy names inherited from upstream
-  //   3. ~/.mini-code/settings.json   this tool's explicit configuration
+  //   3. <data dir>/settings.json   this tool's explicit configuration (default ~/.weave)
   //   4. ANTHROPIC_* process env      often owned by another tool (pi, Claude Code)
   //   5. ~/.claude/settings.json      shared Claude configuration
   //
@@ -260,7 +283,7 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const model = resolveFirst([
     { value: env.MINIWEAVE_MODEL, source: 'MINIWEAVE_MODEL', tier: 'miniweave-env' },
     { value: env.MINI_CODE_MODEL, source: 'MINI_CODE_MODEL', tier: 'mini-code-env' },
-    { value: asText(miniCodeSettings.model), source: `${MINI_CODE_SETTINGS_PATH} (model)`, tier: 'mini-code-settings' },
+    { value: asText(miniWeaveSettings.model), source: `${MINI_CODE_SETTINGS_PATH} (model)`, tier: 'mini-code-settings' },
     { value: env.ANTHROPIC_MODEL, source: 'ANTHROPIC_MODEL', tier: 'process-env' },
     { value: asText(claudeEnv.ANTHROPIC_MODEL), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
   ])
@@ -268,7 +291,7 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const endpoint = resolveFirst([
     { value: env.MINIWEAVE_BASE_URL, source: 'MINIWEAVE_BASE_URL', tier: 'miniweave-env' },
     { value: env.MINI_CODE_BASE_URL, source: 'MINI_CODE_BASE_URL', tier: 'mini-code-env' },
-    { value: asText(miniCodeEnv.ANTHROPIC_BASE_URL), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' },
+    { value: asText(miniWeaveEnv.ANTHROPIC_BASE_URL), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' },
     { value: env.ANTHROPIC_BASE_URL, source: 'ANTHROPIC_BASE_URL', tier: 'process-env' },
     { value: asText(claudeEnv.ANTHROPIC_BASE_URL), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
   ])
@@ -278,8 +301,8 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const authCandidates = [
     { value: env.MINIWEAVE_AUTH_TOKEN, source: 'MINIWEAVE_AUTH_TOKEN', tier: 'miniweave-env' as const, kind: 'authToken' as const },
     { value: env.MINIWEAVE_API_KEY, source: 'MINIWEAVE_API_KEY', tier: 'miniweave-env' as const, kind: 'apiKey' as const },
-    { value: asText(miniCodeEnv.ANTHROPIC_AUTH_TOKEN), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'authToken' as const },
-    { value: asText(miniCodeEnv.ANTHROPIC_API_KEY), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'apiKey' as const },
+    { value: asText(miniWeaveEnv.ANTHROPIC_AUTH_TOKEN), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'authToken' as const },
+    { value: asText(miniWeaveEnv.ANTHROPIC_API_KEY), source: `${MINI_CODE_SETTINGS_PATH} (env)`, tier: 'mini-code-settings' as const, kind: 'apiKey' as const },
     { value: env.ANTHROPIC_AUTH_TOKEN, source: 'ANTHROPIC_AUTH_TOKEN', tier: 'process-env' as const, kind: 'authToken' as const },
     { value: env.ANTHROPIC_API_KEY, source: 'ANTHROPIC_API_KEY', tier: 'process-env' as const, kind: 'apiKey' as const },
     { value: asText(claudeEnv.ANTHROPIC_AUTH_TOKEN), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' as const, kind: 'authToken' as const },
@@ -293,7 +316,7 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const maxOutputCandidate = resolveFirst([
     { value: env.MINIWEAVE_MAX_OUTPUT_TOKENS, source: 'MINIWEAVE_MAX_OUTPUT_TOKENS', tier: 'miniweave-env' },
     { value: env.MINI_CODE_MAX_OUTPUT_TOKENS, source: 'MINI_CODE_MAX_OUTPUT_TOKENS', tier: 'mini-code-env' },
-    { value: asText(miniCodeSettings.maxOutputTokens), source: `${MINI_CODE_SETTINGS_PATH} (maxOutputTokens)`, tier: 'mini-code-settings' },
+    { value: asText(miniWeaveSettings.maxOutputTokens), source: `${MINI_CODE_SETTINGS_PATH} (maxOutputTokens)`, tier: 'mini-code-settings' },
     { value: asText(claudeEnv.MINI_CODE_MAX_OUTPUT_TOKENS), source: `${CLAUDE_SETTINGS_PATH} (env)`, tier: 'claude-settings' },
   ])
   const parsedMaxOutputTokens = Number(maxOutputCandidate.value)
@@ -305,14 +328,14 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const modelValue = model.value
   if (!modelValue) {
     throw new Error(
-      'No model configured. Set MINIWEAVE_MODEL, ~/.mini-code/settings.json, or ANTHROPIC_MODEL.',
+      `No model configured. Set MINIWEAVE_MODEL, ${MINI_CODE_SETTINGS_PATH}, or ANTHROPIC_MODEL.`,
     )
   }
 
   if (!authToken && !apiKey) {
     throw new Error(
       'No auth configured. Set MINIWEAVE_AUTH_TOKEN / MINIWEAVE_API_KEY, '
-        + '~/.mini-code/settings.json, or ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY.',
+        + `${MINI_CODE_SETTINGS_PATH}, or ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY.`,
     )
   }
 

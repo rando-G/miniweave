@@ -10,7 +10,7 @@ export {
   renderStatusLine,
   renderToolPanel,
 } from './chrome.js'
-export { renderInputPrompt } from './input.js'
+export { INPUT_PROMPT_PREFIX, inputPromptCaretWidth, renderInputPrompt } from './input.js'
 export {
   clearScreen,
   enterAlternateScreen,

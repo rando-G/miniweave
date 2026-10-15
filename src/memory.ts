@@ -22,6 +22,7 @@ const CANDIDATES_PER_DIR = [
   'MINI.md',
   'MINI.local.md',
   path.join('.mini-code', 'MINI.md'),
+  path.join('.weave', 'MINI.md'),
   'CLAUDE.md',
   'CLAUDE.local.md',
   path.join('.claude', 'CLAUDE.md'),
@@ -177,10 +178,12 @@ export async function discoverInstructionFiles(
       }
     }
 
-    for (const rulePath of await discoverRuleFiles(path.join(dir, '.mini-code', 'rules'))) {
-      const content = await tryRead(rulePath)
-      if (content) {
-        files.push({ path: rulePath, content: await resolveIncludes(content, rulePath, new Set([rulePath])) })
+    for (const configDir of ['.weave', '.mini-code']) {
+      for (const rulePath of await discoverRuleFiles(path.join(dir, configDir, 'rules'))) {
+        const content = await tryRead(rulePath)
+        if (content) {
+          files.push({ path: rulePath, content: await resolveIncludes(content, rulePath, new Set([rulePath])) })
+        }
       }
     }
   }

@@ -9,6 +9,7 @@ export {
   renderBanner,
   renderContextBadge,
   renderFooterBar,
+  inputPromptCaretWidth,
   renderInputPrompt,
   renderPanel,
   renderPermissionPrompt,

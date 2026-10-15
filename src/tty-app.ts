@@ -48,6 +48,7 @@ import {
   hideCursor,
   renderBanner,
   renderFooterBar,
+  inputPromptCaretWidth,
   renderInputPrompt,
   renderPanel,
   renderPermissionPrompt,
@@ -271,6 +272,28 @@ function renderHeaderPanel(args: TtyAppArgs, state: ScreenState): string {
   )
 }
 
+const PANEL_CONTENT_LEFT_PADDING = 2
+
+/**
+ * Put the terminal's real cursor on the input caret. The framed prompt panel
+ * starts its content after `│ `, so the caret column is the prompt prefix plus
+ * the text before the caret, shifted right by that padding. Without this the
+ * cursor stays wherever the last frame write ended and IME composition renders
+ * outside the input box.
+ */
+function computeInputCursor(
+  state: ScreenState,
+  inputRow: number,
+): { row: number; column: number } {
+  const width = Math.max(60, process.stdout.columns ?? 100)
+  const inner = Math.max(1, width - 4)
+  const caret = inputPromptCaretWidth(state.input, state.cursorOffset)
+  return {
+    row: inputRow + Math.floor(caret / inner),
+    column: PANEL_CONTENT_LEFT_PADDING + (caret % inner) + 1,
+  }
+}
+
 function renderPromptPanel(state: ScreenState): string {
   const commands = getVisibleCommands(state.input)
   const promptBody = [
@@ -337,8 +360,16 @@ function getMaxTranscriptScrollOffset(args: TtyAppArgs, state: ScreenState): num
   )
 }
 
-function screenToAbsoluteLineIndex(
-  _args: TtyAppArgs,
+/**
+ * Row (1-based) of the first transcript body line, given how many frame lines
+ * were written above it. Named so the mouse mapping and its regression test
+ * share one definition instead of a magic offset.
+ */
+export function resolveTranscriptBodyStartY(linesAbove: number): number {
+  return linesAbove + 1
+}
+
+export function screenToAbsoluteLineIndex(
   state: ScreenState,
   screenY: number,
 ): number {
@@ -759,7 +790,12 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
   const headerPanel = renderHeaderPanel(args, state)
   frame.push(headerPanel)
   frame.push('')
-  state.transcriptBodyStartY = headerPanel.split('\n').length + 4
+  // The session-feed panel renders without a frame, so its first body line is
+  // the next frame line after the header and its spacer. `screenY` from the
+  // mouse is 1-based while frame indices are 0-based.
+  state.transcriptBodyStartY = resolveTranscriptBodyStartY(
+    frame.reduce((count, block) => count + block.split('\n').length, 0),
+  )
   state.transcriptBodyLines = getTranscriptBodyLines(args, state)
 
   if (state.pendingApproval) {
@@ -850,6 +886,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
     ),
   )
   frame.push(renderPermissionSummary(args, state))
+  const promptPanelIndex = frame.reduce((count, block) => count + block.split('\n').length, 0)
   frame.push(renderPromptPanel(state))
   frame.push(
     renderFooterBar(
@@ -864,7 +901,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
       renderSubAgentFooter(args.subAgents),
     ),
   )
-  renderTerminalFrame(frame.join('\n'))
+  renderTerminalFrame(frame.join('\n'), computeInputCursor(state, promptPanelIndex + 2))
 }
 
 function renderSubAgentFooter(manager: SubAgentManager): string | undefined {
@@ -1881,7 +1918,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
       showCursor()
       exitAlternateScreen()
       process.stdin.pause()
-      process.stdout.write(`Session ${permissionArgs.sessionId} saved. To resume: minicode --resume ${permissionArgs.sessionId}\n`)
+      process.stdout.write(`Session ${permissionArgs.sessionId} saved. To resume: weave --resume ${permissionArgs.sessionId}\n`)
     }
 
     const finish = () => {
@@ -2116,7 +2153,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
                 setStatus(state, null)
                 pushTranscriptEntry(state, {
                   kind: 'assistant',
-                  body: `Project "${proj.dir}" has ${proj.sessionCount} session(s). Switch to it by exiting and running:\n\n  cd <project-path> && minicode --resume`,
+                  body: `Project "${proj.dir}" has ${proj.sessionCount} session(s). Switch to it by exiting and running:\n\n  cd <project-path> && weave --resume`,
                 })
                 scheduleRender()
               }
@@ -2232,13 +2269,15 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
         if (event.kind === 'mouse') {
           const screenX = event.x + 1
           const screenY = event.y + 1
-          const lineIndex = screenToAbsoluteLineIndex(permissionArgs, state, screenY)
+          const lineIndex = screenToAbsoluteLineIndex(state, screenY)
           if (lineIndex < 0) {
             state.mouseDown = null
             state.selection = null
             return
           }
-          const col = Math.max(0, screenX - 3)  // panel border (2) + content starts after left padding space
+          // The session-feed panel is frameless, so transcript column 0 is the
+          // first terminal column (`screenX` is 1-based).
+          const col = Math.max(0, screenX - 1)
 
           if (event.action === 'press' && event.button === 'left') {
             state.mouseDown = { x: col, y: lineIndex }

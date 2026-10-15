@@ -7,11 +7,11 @@ import { fileURLToPath } from 'node:url'
 import {
   MINI_CODE_SETTINGS_PATH,
   loadEffectiveSettings,
-  saveMiniCodeSettings,
+  saveMiniWeaveSettings,
 } from './config.js'
 
 function hasPathEntry(target: string): boolean {
-  const pathEntries = (process.env.PATH ?? '').split(':')
+  const pathEntries = (process.env.PATH ?? '').split(path.delimiter)
   return pathEntries.includes(target)
 }
 
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
       throw new Error('ANTHROPIC_AUTH_TOKEN 不能为空。')
     }
 
-    await saveMiniCodeSettings({
+    await saveMiniWeaveSettings({
       model,
       env: {
         ANTHROPIC_BASE_URL: baseUrl,
@@ -86,20 +86,24 @@ async function main(): Promise<void> {
     })
 
     const home = os.homedir()
+    const isWindows = process.platform === 'win32'
     const targetBinDir = process.env.MINI_CODE_BIN_DIR
       ? path.resolve(process.env.MINI_CODE_BIN_DIR)
       : path.join(home, '.local', 'bin')
-    const launcherPath = path.join(targetBinDir, 'weave')
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-    const launcherScript = [
-      '#!/usr/bin/env bash',
-      'set -euo pipefail',
-      `exec "${path.join(repoRoot, 'bin', 'weave')}" "$@"`,
-      '',
-    ].join('\n')
+    const launcherTarget = path.join(repoRoot, 'bin', 'weave.mjs')
+    const launcherPath = path.join(targetBinDir, isWindows ? 'weave.cmd' : 'weave')
+    const launcherScript = isWindows
+      ? ['@echo off', `node "${launcherTarget}" %*`, ''].join('\r\n')
+      : [
+          '#!/usr/bin/env bash',
+          'set -euo pipefail',
+          `exec node "${launcherTarget}" "$@"`,
+          '',
+        ].join('\n')
 
     await mkdir(targetBinDir, { recursive: true })
-    await writeFile(launcherPath, launcherScript, { mode: 0o755 })
+    await writeFile(launcherPath, launcherScript, isWindows ? {} : { mode: 0o755 })
 
     console.log('')
     console.log('安装完成。')
@@ -109,11 +113,16 @@ async function main(): Promise<void> {
     if (!hasPathEntry(targetBinDir)) {
       console.log('')
       console.log(`你的 PATH 里还没有 ${targetBinDir}`)
-      console.log(`可以把下面这行加入 ~/.bashrc 或 ~/.zshrc:`)
-      console.log(`export PATH="${targetBinDir}:$PATH"`)
+      if (isWindows) {
+        console.log('把它加入用户 PATH，或改用推荐的 `npm link`（会装到已在 PATH 的 npm 全局目录）。')
+      } else {
+        console.log('可以把下面这行加入 ~/.bashrc 或 ~/.zshrc:')
+        console.log(`export PATH="${targetBinDir}:$PATH"`)
+        console.log('或改用推荐的 `npm link`。')
+      }
     } else {
       console.log('')
-      console.log('现在你可以在任意终端输入 `minicode` 启动。')
+      console.log('现在你可以在任意终端输入 `weave` 启动。')
     }
   } finally {
     rl.close()

@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { MINI_CODE_DIR, projectConfigDir } from './config.js'
 import { isEnoentError } from './utils/errors.js'
 
 export type SkillSummary = {
@@ -49,11 +50,11 @@ function extractDescription(markdown: string): string {
 function getSkillRoots(cwd: string): SkillSourceRoot[] {
   return [
     {
-      root: path.join(cwd, '.mini-code', 'skills'),
+      root: path.join(projectConfigDir(cwd), 'skills'),
       source: 'project',
     },
     {
-      root: path.join(os.homedir(), '.mini-code', 'skills'),
+      root: path.join(MINI_CODE_DIR, 'skills'),
       source: 'user',
     },
     {
@@ -69,8 +70,8 @@ function getSkillRoots(cwd: string): SkillSourceRoot[] {
 
 function getManagedSkillRoot(scope: SkillScope, cwd: string): string {
   return scope === 'project'
-    ? path.join(cwd, '.mini-code', 'skills')
-    : path.join(os.homedir(), '.mini-code', 'skills')
+    ? path.join(projectConfigDir(cwd), 'skills')
+    : path.join(MINI_CODE_DIR, 'skills')
 }
 
 async function listSkillDirs(root: SkillSourceRoot): Promise<LoadedSkill[]> {

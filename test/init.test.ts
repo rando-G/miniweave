@@ -91,17 +91,17 @@ describe('initializeRepo', () => {
     try {
       const report = await initializeRepo(dir)
       assert.equal(report.artifacts.length, 3)
-      assert.equal(report.artifacts[0].name, '.mini-code/')
+      assert.equal(report.artifacts[0].name, '.weave/')
       assert.equal(report.artifacts[0].status, 'created')
       assert.equal(report.artifacts[1].name, '.gitignore')
       assert.equal(report.artifacts[2].name, 'MINI.md')
-      assert.ok(existsSync(path.join(dir, '.mini-code')))
+      assert.ok(existsSync(path.join(dir, '.weave')))
       assert.ok(existsSync(path.join(dir, 'MINI.md')))
 
       const gitignore = readFileSync(path.join(dir, '.gitignore'), 'utf8')
-      assert.ok(gitignore.includes('.mini-code/settings.local.json'))
-      assert.ok(gitignore.includes('.mini-code/sessions/'))
-      assert.ok(gitignore.includes('# MiniCode local artifacts'))
+      assert.ok(gitignore.includes('.weave/settings.local.json'))
+      assert.ok(gitignore.includes('.weave/sessions/'))
+      assert.ok(gitignore.includes('# MiniWeave local artifacts'))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -135,11 +135,11 @@ describe('initializeRepo', () => {
   test('appends to existing .gitignore without duplicating entries', async () => {
     const dir = makeTempDir()
     try {
-      writeFileSync(path.join(dir, '.gitignore'), '.mini-code/sessions/\n')
+      writeFileSync(path.join(dir, '.gitignore'), '.weave/sessions/\n')
       await initializeRepo(dir)
       const gitignore = readFileSync(path.join(dir, '.gitignore'), 'utf8')
-      assert.equal(gitignore.match(/\.mini-code\/settings\.local\.json/g)?.length, 1)
-      assert.equal(gitignore.match(/\.mini-code\/sessions\//g)?.length, 1)
+      assert.equal(gitignore.match(/\.weave\/settings\.local\.json/g)?.length, 1)
+      assert.equal(gitignore.match(/\.weave\/sessions\//g)?.length, 1)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -151,9 +151,9 @@ describe('initializeRepo', () => {
       await initializeRepo(dir)
       const gitignore = readFileSync(path.join(dir, '.gitignore'), 'utf8')
       const lines = gitignore.split('\n').filter(l => l.trim())
-      assert.equal(lines[0], '# MiniCode local artifacts')
-      assert.ok(lines.includes('.mini-code/settings.local.json'))
-      assert.ok(lines.includes('.mini-code/sessions/'))
+      assert.equal(lines[0], '# MiniWeave local artifacts')
+      assert.ok(lines.includes('.weave/settings.local.json'))
+      assert.ok(lines.includes('.weave/sessions/'))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -165,7 +165,7 @@ describe('renderInitReport', () => {
     const report = {
       projectRoot: '/test/project',
       artifacts: [
-        { name: '.mini-code/', status: 'created' as const },
+        { name: '.weave/', status: 'created' as const },
         { name: '.gitignore', status: 'updated' as const },
         { name: 'MINI.md', status: 'skipped' as const },
       ],
@@ -173,7 +173,7 @@ describe('renderInitReport', () => {
     const rendered = renderInitReport(report)
     assert.ok(rendered.includes('Init'))
     assert.ok(rendered.includes('/test/project'))
-    assert.ok(rendered.includes('.mini-code/'))
+    assert.ok(rendered.includes('.weave/'))
     assert.ok(rendered.includes('created'))
     assert.ok(rendered.includes('updated'))
     assert.ok(rendered.includes('skipped (already exists)'))

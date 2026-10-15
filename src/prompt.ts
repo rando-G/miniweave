@@ -12,7 +12,7 @@ export async function buildSystemPrompt(
   },
 ): Promise<string> {
   const parts = [
-    'You are mini-code, a terminal coding assistant.',
+    'You are MiniWeave (the terminal command is `weave`), a plugin-based terminal coding agent.',
     'Default behavior: inspect the repository, use tools, make code changes when appropriate, and explain results clearly.',
     'Prefer reading files, searching code, editing files, and running verification commands over giving purely theoretical advice.',
     `Current cwd: ${cwd}`,

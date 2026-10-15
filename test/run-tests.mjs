@@ -1,5 +1,6 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, mkdtemp, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -16,13 +17,24 @@ if (testFiles.length === 0) {
   process.exit(1)
 }
 
+// Isolate the data directory unless the caller pinned one. Some tests delete
+// MINI_CODE_PROJECTS_DIR, which is the real ~/.mini-code/projects by default.
+const ownedHome = process.env.MINI_CODE_HOME ? null : await mkdtemp(path.join(os.tmpdir(), 'miniweave-test-home-'))
+const isolatedHome = process.env.MINI_CODE_HOME ?? ownedHome
+
 const child = spawn(
   process.execPath,
   ['--import', 'tsx', '--test', ...testFiles],
-  { stdio: 'inherit' },
+  {
+    stdio: 'inherit',
+    env: { ...process.env, MINI_CODE_HOME: isolatedHome },
+  },
 )
 
-child.on('exit', (code, signal) => {
+child.on('exit', async (code, signal) => {
+  if (ownedHome) {
+    await rm(ownedHome, { recursive: true, force: true }).catch(() => {})
+  }
   if (signal) {
     process.kill(process.pid, signal)
     return

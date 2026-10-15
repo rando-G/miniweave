@@ -297,7 +297,7 @@ export function renderBanner(
   ]
   const metaLine = joinSegmentsWithinWidth(metaBadges, '  ', panelInner)
 
-  return renderPanel('MiniCode', metaLine)
+  return renderPanel('MiniWeave', metaLine)
 }
 
 export function renderPermissionSummaryLine(

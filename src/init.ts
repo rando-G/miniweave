@@ -30,8 +30,8 @@ type RepoDetection = {
   rustDir: boolean
 }
 
-const GITIGNORE_COMMENT = '# MiniCode local artifacts'
-const GITIGNORE_ENTRIES = ['.mini-code/settings.local.json', '.mini-code/sessions/']
+const GITIGNORE_COMMENT = '# MiniWeave local artifacts'
+const GITIGNORE_ENTRIES = ['.weave/settings.local.json', '.weave/sessions/']
 
 function detectRepo(cwd: string): RepoDetection {
   const pkgJson = (() => {
@@ -164,7 +164,7 @@ export function renderInitMiniMd(cwd: string): string {
   sections.push([
     '# MINI.md',
     '',
-    'This file provides guidance to MiniCode when working with code in this repository.',
+    'This file provides guidance to MiniWeave when working with code in this repository.',
     '',
   ])
 
@@ -210,7 +210,7 @@ export function renderInitMiniMd(cwd: string): string {
   sections.push([
     '## Working agreement',
     '- Prefer small, reviewable changes and keep generated bootstrap files aligned with actual repo workflows.',
-    '- Keep shared defaults in `~/.mini-code/settings.json`; reserve `.mini-code/settings.local.json` for project-local overrides.',
+    '- Keep shared defaults in `~/.weave/settings.json`; reserve `.weave/settings.local.json` for project-local overrides.',
     '- Do not overwrite existing `MINI.md` content automatically; update it intentionally when repo workflows change.',
     '',
   ])
@@ -302,10 +302,10 @@ async function ensureGitignoreEntries(
 export async function initializeRepo(cwd: string): Promise<InitReport> {
   const artifacts: InitArtifact[] = []
 
-  const miniCodeDir = path.join(cwd, '.mini-code')
+  const weaveDir = path.join(cwd, '.weave')
   artifacts.push({
-    name: '.mini-code/',
-    status: await ensureDir(miniCodeDir),
+    name: '.weave/',
+    status: await ensureDir(weaveDir),
   })
 
   const gitignorePath = path.join(cwd, '.gitignore')

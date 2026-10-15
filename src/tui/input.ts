@@ -1,4 +1,7 @@
 import process from 'node:process'
+import { stringDisplayWidth } from './chrome.js'
+
+export const INPUT_PROMPT_PREFIX = 'weave> '
 
 const RESET = '\u001b[0m'
 const DIM = '\u001b[2m'
@@ -27,7 +30,7 @@ export function renderInputPrompt(
   const before = input.slice(0, offset)
   const current = input[offset] ?? ' '
   const after = input.slice(Math.min(offset + 1, input.length))
-  const promptPrefix = 'mini-code prompt> '
+  const promptPrefix = INPUT_PROMPT_PREFIX
   const visibleInput = `${promptPrefix}${before}${current}${after}`
   const panelInnerWidth = Math.max(0, Math.max(60, process.stdout.columns ?? 100) - 4)
   const hintMaxLength = Math.max(0, panelInnerWidth - visibleInput.length - 1)
@@ -37,5 +40,16 @@ export function renderInputPrompt(
   )
   const hint = input || !hintText ? '' : ` ${DIM}${hintText}${RESET}`
 
-  return `${GREEN}${BOLD}mini-code prompt>${RESET} ${before}${REVERSE}${current}${RESET}${after}${hint}`
+  const promptLabel = INPUT_PROMPT_PREFIX.trimEnd()
+  return `${GREEN}${BOLD}${promptLabel}${RESET} ${before}${REVERSE}${current}${RESET}${after}${hint}`
+}
+
+/**
+ * Display offset (0-based) of the caret within the input prompt text. The
+ * terminal's own cursor is placed here so IME composition appears inside the
+ * input box rather than wherever the last frame write happened to leave it.
+ */
+export function inputPromptCaretWidth(input: string, cursorOffset: number): number {
+  const offset = Math.max(0, Math.min(cursorOffset, input.length))
+  return stringDisplayWidth(INPUT_PROMPT_PREFIX) + stringDisplayWidth(input.slice(0, offset))
 }

@@ -297,7 +297,7 @@ export class PermissionManager {
 
     if (!this.prompt) {
       throw new Error(
-        `Path ${normalizedTarget} is outside cwd ${this.workspaceRoot}. Start minicode in TTY mode to approve it.`,
+        `Path ${normalizedTarget} is outside cwd ${this.workspaceRoot}. Start weave in TTY mode to approve it.`,
       )
     }
 
@@ -379,7 +379,7 @@ export class PermissionManager {
 
     if (!this.prompt) {
       throw new Error(
-        `Command requires approval: ${signature}. Start minicode in TTY mode to approve it.`,
+        `Command requires approval: ${signature}. Start weave in TTY mode to approve it.`,
       )
     }
 
@@ -448,7 +448,7 @@ export class PermissionManager {
 
     if (!this.prompt) {
       throw new Error(
-        `Edit requires approval: ${normalizedTarget}. Start minicode in TTY mode to review it.`,
+        `Edit requires approval: ${normalizedTarget}. Start weave in TTY mode to review it.`,
       )
     }
 

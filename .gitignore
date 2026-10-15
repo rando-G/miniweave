@@ -11,3 +11,9 @@ dist/
 
 # Local tooling directory (not part of the project)
 .workbuddy/
+
+# RSI scratch worktrees (if a campaign is pointed inside the repo)
+.weave-rsi/
+
+# Windows reserved-name artifact
+nul

@@ -5,7 +5,7 @@
   "description": "A plugin-based coding agent harness, derived from MiniCode (MIT).",
   "type": "module",
   "bin": {
-    "weave": "./bin/weave"
+    "weave": "./bin/weave.mjs"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -14,6 +14,9 @@
     "test": "node test/run-tests.mjs",
     "bench:tokens": "tsx bench/token-accuracy.ts",
     "bench:tokens:live": "tsx bench/token-accuracy.ts --live",
+    "bench:rsi": "tsx bench/rsi-demo.ts",
+    "bench:rsi:self": "tsx bench/rsi-self.ts",
+    "bench:rsi:model": "tsx bench/rsi-model.ts",
     "install-local": "tsx src/install.ts"
   },
   "dependencies": {

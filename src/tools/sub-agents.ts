@@ -47,7 +47,7 @@ export function createSubAgentTools(
   const listAgentsTool: ToolDefinition<Record<string, never>> = {
     name: 'list_agents',
     description:
-      'List all sub-agents created in this MiniCode process and their current status.',
+      'List all sub-agents created in this MiniWeave process and their current status.',
     inputSchema: { type: 'object', properties: {} },
     schema: z.object({}),
     async run() {

@@ -1,9 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import { readMcpTokensFile } from './config.js'
+import { MINI_CODE_DIR, readMcpTokensFile } from './config.js'
 import type { McpServerConfig } from './config.js'
 import type { ToolDefinition, ToolResult } from './tool.js'
 import { getErrorCode } from './utils/errors.js'
@@ -62,11 +61,7 @@ export type McpServerSummary = {
 type JsonRpcProtocol = 'content-length' | 'newline-json' | 'streamable-http'
 const MCP_INITIALIZE_TIMEOUT_MS = 10000
 const MCP_INITIALIZE_PROBE_TIMEOUT_MS = 1200
-const MCP_PROTOCOL_CACHE_PATH = path.join(
-  os.homedir(),
-  '.mini-code',
-  'mcp-protocol-cache.json',
-)
+const MCP_PROTOCOL_CACHE_PATH = path.join(MINI_CODE_DIR, 'mcp-protocol-cache.json')
 
 type ProtocolCache = Record<string, JsonRpcProtocol>
 

@@ -4,7 +4,7 @@ import {
   MINI_CODE_PERMISSIONS_PATH,
   MINI_CODE_SETTINGS_PATH,
   loadRuntimeConfig,
-  saveMiniCodeSettings,
+  saveMiniWeaveSettings,
 } from './config.js'
 import { initializeRepo, renderInitReport } from './init.js'
 import { discoverInstructionFiles, renderMemoryReport } from './memory.js'
@@ -56,12 +56,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: '/model',
     usage: '/model <model-name>',
-    description: 'Persist a model override into ~/.mini-code/settings.json.',
+    description: 'Persist a model override into ~/.weave/settings.json.',
   },
   {
     name: '/config-paths',
     usage: '/config-paths',
-    description: 'Show mini-code and Claude fallback settings paths.',
+    description: 'Show weave and Claude fallback settings paths.',
   },
   {
     name: '/skills',
@@ -96,12 +96,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: '/permissions',
     usage: '/permissions',
-    description: 'Show mini-code permission storage path.',
+    description: 'Show weave permission storage path.',
   },
   {
     name: '/exit',
     usage: '/exit',
-    description: 'Exit mini-code.',
+    description: 'Exit weave.',
   },
   {
     name: '/ls',
@@ -161,7 +161,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: '/init',
     usage: '/init',
-    description: 'Create .mini-code/, .gitignore entries, and MINI.md in the current project (idempotent).',
+    description: 'Create .weave/, .gitignore entries, and MINI.md in the current project (idempotent).',
   },
   {
     name: '/memory',
@@ -223,9 +223,9 @@ export async function tryHandleLocalCommand(
 
   if (input === '/config-paths') {
     return [
-      `mini-code settings: ${MINI_CODE_SETTINGS_PATH}`,
-      `mini-code permissions: ${MINI_CODE_PERMISSIONS_PATH}`,
-      `mini-code mcp: ${MINI_CODE_MCP_PATH}`,
+      `weave settings: ${MINI_CODE_SETTINGS_PATH}`,
+      `weave permissions: ${MINI_CODE_PERMISSIONS_PATH}`,
+      `weave mcp: ${MINI_CODE_MCP_PATH}`,
       `compat fallback: ${CLAUDE_SETTINGS_PATH}`,
     ].join('\n')
   }
@@ -237,7 +237,7 @@ export async function tryHandleLocalCommand(
   if (input === '/skills') {
     const skills = context?.tools?.getSkills() ?? []
     if (skills.length === 0) {
-      return 'No skills discovered. Add skills under ~/.mini-code/skills/<name>/SKILL.md, .mini-code/skills/<name>/SKILL.md, .claude/skills/<name>/SKILL.md, or ~/.claude/skills/<name>/SKILL.md.'
+      return 'No skills discovered. Add skills under ~/.weave/skills/<name>/SKILL.md, .weave/skills/<name>/SKILL.md, .claude/skills/<name>/SKILL.md, or ~/.claude/skills/<name>/SKILL.md.'
     }
 
     return skills
@@ -251,7 +251,7 @@ export async function tryHandleLocalCommand(
   if (input === '/mcp') {
     const servers = context?.tools?.getMcpServers() ?? []
     if (servers.length === 0) {
-      return 'No MCP servers configured. Add mcpServers to ~/.mini-code/settings.json, ~/.mini-code/mcp.json, or project .mcp.json.'
+      return 'No MCP servers configured. Add mcpServers to ~/.weave/settings.json, ~/.weave/mcp.json, or project .mcp.json.'
     }
 
     return servers
@@ -303,7 +303,7 @@ export async function tryHandleLocalCommand(
       return '用法: /model <model-name>'
     }
 
-    await saveMiniCodeSettings({ model })
+    await saveMiniWeaveSettings({ model })
     return `saved model=${model} to ${MINI_CODE_SETTINGS_PATH}`
   }
 
