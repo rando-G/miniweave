@@ -112,5 +112,5 @@
 - [ ] `npm run gui` 入口；复用 `tui/*` 已有的纯渲染数据结构。
 
 ### P3 — 文档与整理
-- [ ] 更新 `ARCHITECTURE.md`（仍是上游 MiniCode 原文，未提 plugin/goal/loop/rsi）。
-- [ ] 更新 `README.md` roadmap 勾选状态。
+- [x] 重写 `README.md`（围绕亮点，见 2026-10-15 记录），roadmap 勾选已更新。
+- [x] 删除已被 README 取代的上游文档：`ARCHITECTURE*` / `ROADMAP*` / `USAGE*` / `CLAUDE_CODE_PATTERNS*` / `CONTRIBUTING*` / `docs/index.html`（保留 `docs/logo.svg`，README 在用）。
