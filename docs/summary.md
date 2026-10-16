@@ -15,6 +15,51 @@
 
 ---
 
+## 2026-10-16
+
+### 目标
+
+把简历里那句"支持显式运行预算（模型轮次 / 工具调用数 / 总超时）"补齐 —— 此前只有 `maxSteps` 落地，工具调用数上限与整轮总超时都还挂在 `todo.md` 的 Backlog 上。
+
+### 做了什么
+
+- 新增 `src/run-budget.ts`：
+
+  | 成员 | 职责 |
+  |---|---|
+  | `RunBudgetLimits` | `maxSteps` / `maxToolCalls` / `timeoutMs`，三项均可缺省 |
+  | `RunBudget` | 三个硬计数器 + 可注入时钟；`stopBeforeStep()` / `stopBeforeToolCall()` 先检查，`beginStep()` / `spendToolCall()` 后消费，越界抛 `RunBudgetLimitError` 兜底 |
+  | `turnBudgetFor(mode)` | 显式预算策略：goal/loop = 50 轮 / 200 次工具调用 / 30min；交互 = 100 轮 / 200 次工具调用、无 wall-clock |
+
+- `src/agent-loop.ts` 接入：
+  - `AgentTurnArgs` 增加 `maxToolCalls` / `timeoutMs` / `now`（时钟注入，便于确定性测试）。
+  - 新增两个终态 `max_tool_calls` / `timeout`（`AgentTurnOutcome` 6 → 8 个）；超限仍走"优雅停止 + 追加一条 assistant 说明"，不抛错，与 `max_steps` 一致。
+  - 工具调用数在**批内逐个**检查：预算耗尽后剩下的 call 保留 `Cancelled before execution.` 占位，`tool_call ↔ tool_result` 配对不变式不破。
+  - 总超时双层强制：① 每个工作单元前用注入时钟检查；② 用 `AbortSignal.any([用户 signal, 派生的 deadline])` 生成 turn signal 传给模型请求与工具 —— 挂住的模型请求会被立刻掐断，尊重 signal 的工具会中止。
+  - 已经在跑但无视 signal 的工具**跑完不杀**（沿用"宁可不中断，也不留半个副作用"的取舍），所以实际超时上界是 `deadline + 最后一个工具耗时`。
+- `src/index.ts` / `src/tty-app.ts` 调用点改用 `...turnBudgetFor(request.mode)`：`request.mode ? 50 : undefined` 这个"用三元的真假分支兼表'有没有上限'和'上限是多少'"的魔法数字消失，`MAX_TURN_STEPS` 等常量具名化。
+- `src/goal/controller.ts` / `src/runtime/session-runtime.ts`：新终态纳入"暂停自治执行"的判定。
+- `test/run-budget.test.ts`（15 例）：预算单元测试（含假时钟 deadline）+ 集成测试（批内截断与配对、轮次上限回归、挂住的模型被 deadline 掐断、已启动工具跑完、尊重 signal 的工具在 deadline 被打断、自治模式下 deadline 不被误报成工具崩溃、用户 abort 优先于预算、交互模式 progress 死循环被 100 轮封顶）。
+
+### 关键决策
+
+1. **拆成两个检查谓词，而不是一个 `exhausted()`**：第一版把"轮次是否用完"和"这个工具还能不能调"混在一个判断里，结果 `maxSteps: 2` 时最后一轮的工具全被拒（被新测试抓到）。现在 `stopBeforeStep()`（含轮次）与 `stopBeforeToolCall()`（不含轮次）分开 —— **已经付过费的这一轮，它的工具照跑**。
+2. **超时用派生 signal，而不是给每个 I/O 各配一个超时**：这样"整轮 deadline"同时作用到模型请求、上下文压缩调用、以及所有尊重 signal 的工具，而不是逐点配置；也避免污染调用方的 signal（我们只 abort 自己派生出来的那条）。评审时在这里抓到并修掉一个真 bug：deadline 打断一个尊重 signal 的工具时，`ToolRegistry` 会把这次 abort 包成 `fatal: true`，于是 goal/loop（`stopOnFatalToolError: true`）会把它误判成 `failed` 而不是 `timeout` —— 现在 fatal 判定里加了 `!budget.deadlineExceeded()` 守卫，并补了回归测试。
+3. **交互模式不发 wall-clock**：审批与 `ask_user` 的等待时间也算在同一只钟上，扣人类思考的时间不合理；交互模式的失控风险改由轮次 + 工具调用数封顶。代价：交互模式里单个挂死的工具仍无上界（该由"工具级 timeout"解决，见 Backlog）。
+4. **注入时钟而不是 `Date.now()`**：与 RSI 的 `CampaignBudget` 同一模式，deadline 行为可以在测试里确定性验证（`now: () => now`）。
+
+### 验证结果
+
+`npx tsc --noEmit`、`npx eslint src test` 全绿；`npm test` **355 pass / 0 fail**（新增 15 例，原有 340 例全部保持通过）。
+
+### 遗留问题 / 下一步
+
+- 工具级 timeout 仍未统一强制（`grep_files` 没传 signal、`run_command` 无超时），"整轮 deadline"只能保证到 `deadline + 最后一个工具耗时`。
+- 交互模式轮次上限从"无上限"变成 100，属于行为变更；如需更宽松可调 `MAX_INTERACTIVE_TURN_STEPS`。
+- 子 agent 仍只有 `MAX_SUB_AGENT_STEPS = 20`，没有工具数 / 超时预算（worker 只读且可被父级取消，暂按现状保留）。
+
+---
+
 ## 2026-10-15
 
 ### 目标

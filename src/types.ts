@@ -60,7 +60,15 @@ export type ToolCall = {
   input: unknown
 }
 
-export type AgentTurnOutcome = 'final' | 'awaiting_user' | 'aborted' | 'max_steps' | 'failed' | 'controlled_stop'
+export type AgentTurnOutcome =
+  | 'final'
+  | 'awaiting_user'
+  | 'aborted'
+  | 'max_steps'
+  | 'max_tool_calls'
+  | 'timeout'
+  | 'failed'
+  | 'controlled_stop'
 
 export type AgentTurnResult = {
   messages: ChatMessage[]

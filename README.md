@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
-  <img src="https://img.shields.io/badge/tests-340%20passing-brightgreen.svg" alt="Tests: 340 passing" />
+  <img src="https://img.shields.io/badge/tests-355%20passing-brightgreen.svg" alt="Tests: 355 passing" />
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6.svg" alt="TypeScript 5.x" />
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933.svg" alt="Node.js >= 22" />
   <img src="https://img.shields.io/badge/deps-2-brightgreen.svg" alt="2 runtime dependencies" />
@@ -49,10 +49,11 @@ Model · Tool · Session · Permission · Context Manager
 | 🗜️ **四级上下文压缩** | microcompact → snipCompact → context-collapse → autoCompact；超长工具输出落盘，只留预览 |
 | 🤖 **多 Agent** | 只读 worker：独立消息历史、受限工具集、并发上限、可取消 |
 | 🎯 **Goal / Plan / Loop** | 自治执行的三种原语：目标 + 完成标准、todo 计划、定时循环，全部带预算与暂停语义 |
+| ⏱️ **显式运行预算** | 每一轮都有三重上界：模型轮次 / 工具调用数 / wall-clock 超时；时钟可注入（确定性测试），先检查后消费，超限优雅停止 |
 | 🖥️ **手写 TUI** | 全屏 ANSI 渲染、鼠标选词、CJK 友好、输入法（IME）光标定位 |
 | 💾 **会话与记忆** | JSONL 追加式持久化、parentUuid 树、resume / fork、30 天过期清理；分层指令文件加载 |
 | 🔌 **可扩展** | 内置工具集 + MCP（stdio / streamable-http）+ Skills（`.weave/skills`、`.claude/skills` 兼容） |
-| ✅ **测试与评测** | 340 个测试；token 准确度 benchmark；RSI 离线 / 模型驱动两套实验入口 |
+| ✅ **测试与评测** | 355 个测试；token 准确度 benchmark；RSI 离线 / 模型驱动两套实验入口 |
 
 ---
 
@@ -212,6 +213,7 @@ src/
 ├─ plugin/                # 插件化 Runtime（MiniPlugin / ServiceRegistry / PluginRegistry）
 ├─ token/                 # 可插拔 Token 计数（heuristic / anthropic tokenizer）
 ├─ agent-loop.ts          # Model → Tool → Result 多轮状态推进
+├─ run-budget.ts          # 每轮运行预算（模型轮次 / 工具调用数 / wall-clock）
 ├─ tool.ts                # 工具注册、校验、执行
 ├─ tools/                 # 文件 / Shell / MCP / Skills 等工具
 ├─ session.ts             # JSONL 会话持久化 + resume / fork
@@ -221,7 +223,7 @@ src/
 ├─ goal/ plan/ loop/      # 自治执行原语
 ├─ tui/                   # 终端 UI 组件
 └─ tty-app.ts             # TUI 主循环
-test/                     # 340 个测试
+test/                     # 355 个测试
 bench/                    # 评测脚本（token 准确度 / RSI 自改实验）
 docs/                     # 进度文档（todo.md / summary.md）
 ```

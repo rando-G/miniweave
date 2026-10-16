@@ -33,6 +33,7 @@ import {
   type ContentReplacementState,
   type PendingToolResult,
 } from './utils/tool-result-storage.js'
+import { formatDuration, RunBudget, RunBudgetLimitError, type RunBudgetStop } from './run-budget.js'
 
 function isEmptyAssistantResponse(content: string): boolean {
   return content.trim().length === 0
@@ -121,7 +122,14 @@ export type AgentTurnArgs = {
   messages: ChatMessage[]
   cwd: string
   permissions?: PermissionManager
+  /** Model rounds allowed in this turn. `undefined` means no round limit. */
   maxSteps?: number
+  /** Tool executions allowed in this turn. `undefined` means no call limit. */
+  maxToolCalls?: number
+  /** Wall-clock deadline for the whole turn, in milliseconds. */
+  timeoutMs?: number
+  /** Clock behind the deadline; injectable so budget behaviour is testable. */
+  now?: () => number
   modelName?: string
   onToolStart?: (toolName: string, input: unknown) => void
   onToolResult?: (toolName: string, output: string, isError: boolean) => void
@@ -148,15 +156,49 @@ export async function runAgentTurn(args: AgentTurnArgs): Promise<ChatMessage[]> 
 }
 
 export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<AgentTurnResult> {
-  const maxSteps = args.maxSteps
   const modelName = args.modelName ?? ''
+  const now = args.now ?? Date.now
+  const budget = new RunBudget({
+    maxSteps: args.maxSteps,
+    maxToolCalls: args.maxToolCalls,
+    timeoutMs: args.timeoutMs,
+  }, now(), now)
   let messages = args.messages
-  let toolCalls = 0
-  const finish = (outcome: AgentTurnOutcome, error?: string): AgentTurnResult => ({ messages, outcome, toolCalls, ...(error ? { error } : {}) })
-  const model: ModelAdapter = args.signal ? {
+
+  // The deadline stops in-flight model requests and tools by aborting a derived
+  // signal; the caller's signal is never aborted by us. Without a deadline the
+  // caller's own signal object is passed through unchanged.
+  let deadlineHit = false
+  const deadline = new AbortController()
+  const deadlineTimer = budget.hasDeadline
+    ? setTimeout(() => {
+        deadlineHit = true
+        deadline.abort(new RunBudgetLimitError('timeout', `Turn deadline of ${budget.limits.timeoutMs}ms exceeded.`))
+      }, budget.remainingMs ?? 0)
+    : undefined
+  const turnSignal = deadlineTimer
+    ? (args.signal ? AbortSignal.any([args.signal, deadline.signal]) : deadline.signal)
+    : args.signal
+
+  const finish = (outcome: AgentTurnOutcome, error?: string): AgentTurnResult => ({ messages, outcome, toolCalls: budget.toolCallCount, ...(error ? { error } : {}) })
+  const finishForBudget = (stop: RunBudgetStop): AgentTurnResult => {
+    const content = stop === 'max_steps'
+      ? `达到模型轮次上限（${budget.limits.maxSteps} 轮），已停止当前回合。`
+      : stop === 'max_tool_calls'
+        ? `达到工具调用数上限（${budget.limits.maxToolCalls} 次），已停止当前回合。`
+        : `整轮运行超时（${formatDuration(budget.limits.timeoutMs ?? 0)}，已用 ${budget.stepCount} 轮 / ${budget.toolCallCount} 次工具调用），已停止当前回合。`
+    args.onAssistantMessage?.(content, { final: true })
+    messages = [
+      ...messages,
+      { role: 'assistant', content },
+    ]
+    return finish(stop)
+  }
+
+  const model: ModelAdapter = turnSignal ? {
     next(request, options) {
-      throwIfAborted(args.signal)
-      return abortable(args.model.next(request, { ...options, signal: args.signal }), args.signal)
+      throwIfAborted(turnSignal)
+      return abortable(args.model.next(request, { ...options, signal: turnSignal }), turnSignal)
     },
   } : args.model
   let emptyResponseRetryCount = 0
@@ -201,8 +243,13 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
   }
 
   try {
-    for (let step = 0; maxSteps == null || step < maxSteps; step++) {
+    for (;;) {
       throwIfAborted(args.signal)
+      // Check before consuming: a turn never starts work a spent budget cannot pay for.
+      const stop = budget.stopBeforeStep()
+      if (stop) return finishForBudget(stop)
+      budget.beginStep()
+      throwIfAborted(turnSignal)
       let latestStats: import('./utils/token-estimator.js').ContextStats | null = null
       let modelMessages = messages
 
@@ -237,7 +284,7 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
           model,
           contextCollapseState,
         )
-        throwIfAborted(args.signal)
+        throwIfAborted(turnSignal)
         replaceContextCollapseState(collapseResult.state)
         modelMessages = collapseResult.messages
         if (collapseResult.collapsed) {
@@ -251,12 +298,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
       }
 
       // AutoCompact: LLM-based compression when context is critical (first step only)
-      if (step === 0 && modelName) {
+      if (budget.stepCount === 1 && modelName) {
         latestStats = latestStats ?? computeContextStats(modelMessages, modelName)
         args.onContextStats?.(latestStats)
         if (latestStats.warningLevel === 'critical' || latestStats.warningLevel === 'blocked') {
           const result = await autoCompact(modelMessages, modelName, model)
-          throwIfAborted(args.signal)
+          throwIfAborted(turnSignal)
           if (result) {
             messages = result.messages
             modelMessages = messages
@@ -274,12 +321,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
       }
 
       if (args.runtimeContext) modelMessages = withRuntimeContext(modelMessages, args.runtimeContext())
-      throwIfAborted(args.signal)
+      throwIfAborted(turnSignal)
       const next = await model.next(modelMessages, {
         tools: args.tools.list(),
-        signal: args.signal,
+        signal: turnSignal,
       })
-      throwIfAborted(args.signal)
+      throwIfAborted(turnSignal)
 
       if (next.type === 'assistant') {
         const isEmpty = isEmptyAssistantResponse(next.content)
@@ -426,6 +473,9 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
       }> = []
 
       let batchOutcome: AgentTurnOutcome | undefined
+      // A spent budget cuts the batch short; skipped calls keep their placeholder
+      // result so tool_call / tool_result pairing stays intact.
+      let budgetOutcome: RunBudgetStop | undefined
       const toolCallMessages = next.calls.map((call, i) => withProviderUsage<ChatMessage>({
         role: 'assistant_tool_call', toolUseId: call.id, toolName: call.toolName, input: call.input,
       }, i === next.calls.length - 1 ? next.usage : undefined))
@@ -435,13 +485,15 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
       }))]
 
       for (const call of next.calls) {
-        if (batchOutcome || args.signal?.aborted) continue
-        toolCalls++
+        if (batchOutcome || budgetOutcome || turnSignal?.aborted) continue
+        const stop = budget.stopBeforeToolCall()
+        if (stop) { budgetOutcome = stop; continue }
+        budget.spendToolCall()
         args.onToolStart?.(call.toolName, call.input)
         const result = await args.tools.execute(
           call.toolName,
           call.input,
-          { cwd: args.cwd, permissions: args.permissions, signal: args.signal },
+          { cwd: args.cwd, permissions: args.permissions, signal: turnSignal },
         )
         sawToolResultThisTurn = true
         if (!result.ok) {
@@ -462,7 +514,7 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         messages = messages.map(message => message.role === 'tool_result' && message.toolUseId === call.id ? toolResult : message)
         if (result.awaitUser) batchOutcome = 'awaiting_user'
         else if (result.stop) batchOutcome = 'controlled_stop'
-        else if (result.fatal && args.stopOnFatalToolError) batchOutcome = 'failed'
+        else if (result.fatal && args.stopOnFatalToolError && !budget.deadlineExceeded()) batchOutcome = 'failed' // a deadline abort is our abort, not a tool crash
 
         executedToolResults.push({
           call,
@@ -499,20 +551,16 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         return finish('awaiting_user')
       }
       if (args.signal?.aborted) return finish('aborted', String(args.signal.reason ?? 'Execution stopped'))
+      if (budgetOutcome) return finishForBudget(budgetOutcome)
       if (batchOutcome) return finish(batchOutcome)
     }
-
-    const maxStepContent = `达到最大工具步数限制，已停止当前回合。`
-    args.onAssistantMessage?.(maxStepContent, { final: true })
-    messages = [
-      ...messages,
-      {
-        role: 'assistant',
-        content: maxStepContent,
-      },
-    ]
-    return finish('max_steps')
   } catch (error) {
-    return finish(args.signal?.aborted ? 'aborted' : 'failed', error instanceof Error ? error.message : String(error))
+    // A user stop always outranks a budget stop: the caller asked for 'aborted'.
+    if (args.signal?.aborted) return finish('aborted', error instanceof Error ? error.message : String(error))
+    const stopped: RunBudgetStop | undefined = deadlineHit || budget.deadlineExceeded() ? 'timeout' : undefined
+    if (stopped) return finishForBudget(stopped)
+    return finish('failed', error instanceof Error ? error.message : String(error))
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer)
   }
 }

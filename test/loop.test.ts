@@ -7,6 +7,7 @@ import { createUpdatePlanTool } from '../src/tools/plan.js'
 import { askUserTool } from '../src/tools/ask-user.js'
 import { ToolRegistry } from '../src/tool.js'
 import { runAgentTurnWithOutcome } from '../src/agent-loop.js'
+import { turnBudgetFor } from '../src/run-budget.js'
 import type { AgentTurnResult, ChatMessage, ModelAdapter } from '../src/types.js'
 import type { TurnRequest } from '../src/runtime/turn-runner.js'
 
@@ -147,8 +148,8 @@ describe('LoopScheduler fixed-delay scheduling', () => {
     await loop.stop()
   })
 
-  it('pauses on failed, aborted, controlled-stop and max-step outcomes', async () => {
-    for (const outcome of ['failed', 'aborted', 'max_steps', 'controlled_stop'] as const) {
+  it('pauses on failed, aborted, budget and controlled-stop outcomes', async () => {
+    for (const outcome of ['failed', 'aborted', 'max_steps', 'max_tool_calls', 'timeout', 'controlled_stop'] as const) {
       const clock = new FakeClock()
       let calls = 0
       const loop = new LoopScheduler({ clock, busy: () => false, notice: () => {}, settleWorkers: async () => {},
@@ -193,7 +194,7 @@ function runtimeHarness(model: ModelAdapter, executeOverride?: (request: TurnReq
       const result = await runAgentTurnWithOutcome({ model, plan, messages,
         cwd: process.cwd(), tools: runtime.toolsFor(request.mode),
         runtimeContext: () => runtime.contextFor(request.mode), signal: request.signal,
-        maxSteps: request.mode ? 50 : undefined, stopOnFatalToolError: !!request.mode })
+        ...turnBudgetFor(request.mode), stopOnFatalToolError: !!request.mode })
       messages = result.messages
       return result
     }),

@@ -136,7 +136,7 @@ export class SessionRuntime {
 
   private run(request: TurnRequest): Promise<AgentTurnResult> {
     return this.turns.run(signal => this.options.execute({ ...request, signal }), request.signal).then(result => {
-      if (!request.mode && this.loop.enabled && ['failed', 'max_steps', 'aborted'].includes(result.outcome)) {
+      if (!request.mode && this.loop.enabled && ['failed', 'max_steps', 'max_tool_calls', 'timeout', 'aborted'].includes(result.outcome)) {
         this.loop.pauseAfterFailure(result.error ?? result.outcome)
       }
       return result

@@ -7,6 +7,7 @@ import { createUpdatePlanTool } from '../src/tools/plan.js'
 import { askUserTool } from '../src/tools/ask-user.js'
 import { ToolRegistry } from '../src/tool.js'
 import { runAgentTurnWithOutcome } from '../src/agent-loop.js'
+import { turnBudgetFor } from '../src/run-budget.js'
 import type { AgentStep, ChatMessage, ModelAdapter } from '../src/types.js'
 
 const completedTodo = { title: 'Check the result', status: 'completed' as const }
@@ -26,7 +27,7 @@ function harness(next: ModelAdapter['next'], failSave = false) {
       const result = await runAgentTurnWithOutcome({
         model: { next }, messages, tools: runtime.toolsFor(request.mode), plan,
         runtimeContext: () => runtime.contextFor(request.mode), cwd: process.cwd(),
-        signal: request.signal, maxSteps: request.mode ? 50 : undefined, stopOnFatalToolError: !!request.mode,
+        signal: request.signal, ...turnBudgetFor(request.mode), stopOnFatalToolError: !!request.mode,
       })
       messages = result.messages
       return failSave ? { ...result, outcome: 'failed', error: 'Saving failed' } : result

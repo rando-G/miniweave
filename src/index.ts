@@ -29,6 +29,7 @@ import { renderBanner } from './ui.js'
 import { runTtyApp } from './tty-app.js'
 import { SessionRuntime } from './runtime/session-runtime.js'
 import { runAgentTurnWithOutcome } from './agent-loop.js'
+import { turnBudgetFor } from './run-budget.js'
 import {
   applyContextCollapseIfNeeded,
   createContextCollapseState,
@@ -188,7 +189,7 @@ async function main(): Promise<void> {
           const result = await runAgentTurnWithOutcome({
             model, tools: execution.toolsFor(request.mode), plan, messages, cwd, permissions,
             runtimeContext: () => execution.contextFor(request.mode),
-            signal: request.signal, maxSteps: request.mode ? 50 : undefined,
+            signal: request.signal, ...turnBudgetFor(request.mode),
             stopOnFatalToolError: !!request.mode,
             modelName: runtime?.model ?? '', contentReplacementState, contextCollapseState,
             onAssistantMessage: (content, metadata) => {

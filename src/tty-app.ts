@@ -6,6 +6,7 @@ import type { TurnRequest } from './runtime/turn-runner.js'
 import { throwIfAborted } from './abort.js'
 import { formatResponseTokens } from './utils/token-usage-label.js'
 import { runAgentTurnWithOutcome } from './agent-loop.js'
+import { turnBudgetFor } from './run-budget.js'
 import {
   SLASH_COMMANDS,
   findMatchingSlashCommands,
@@ -1480,7 +1481,7 @@ async function executeTtyTurn(
       model: args.model,
       tools: args.execution!.toolsFor(request.mode),
       runtimeContext: () => args.execution!.contextFor(request.mode),
-      maxSteps: request.mode ? 50 : undefined,
+      ...turnBudgetFor(request.mode),
       stopOnFatalToolError: !!request.mode,
       signal: request.signal,
       plan: args.plan,

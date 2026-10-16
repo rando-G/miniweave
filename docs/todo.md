@@ -98,7 +98,7 @@
 - [ ] **合并前校验**：接受项应在对应分支上跑一遍完整 `npm test`（worktree 没有 `node_modules`，需 junction/符号链接方案）。
 - [ ] 建 `src/bench/`：MiniWeave-Bench（多类型任务集 + 判分），作为通用适应度来源，且必须在可变范围之外只读。
 - [ ] 候选隔离补强：沙箱网络关闭、资源上限（内存/时间）、`bench/` 与 `test/` 完整性校验。
-- [ ] "显式运行预算"补齐：工具调用数上限 + 整轮总超时（当前 `maxSteps` 只对 goal/loop 生效，工具数/总超时没有实现）。
+- [x] "显式运行预算"补齐：工具调用数上限 + 整轮总超时（`src/run-budget.ts` 的 `RunBudget` + `turnBudgetFor`；见 `summary.md` 2026-10-16）。
 
 ### P1 — 差异化与消融
 - [ ] replay：用历史 discovery tree 离线重放，比较不同探索策略（Dream-RSI 的差异点）。

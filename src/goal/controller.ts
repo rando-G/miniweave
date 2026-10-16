@@ -76,7 +76,10 @@ export class GoalController {
             break
           }
           if (controller.signal.aborted) break
-          if (result.outcome === 'failed' || result.outcome === 'max_steps' || result.outcome === 'aborted') {
+          if (
+            result.outcome === 'failed' || result.outcome === 'aborted' ||
+            result.outcome === 'max_steps' || result.outcome === 'max_tool_calls' || result.outcome === 'timeout'
+          ) {
             this.manager.pause(result.error ?? `Goal stopped: ${result.outcome}.`, true)
             break
           }
